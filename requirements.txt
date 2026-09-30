@@ -1,0 +1,10 @@
+sentence-transformers
+faiss-cpu
+chromadb
+pinecone
+numpy
+python-dotenv
+tqdm
+google-genai
+fastapi
+uvicorn
