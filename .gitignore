@@ -4,6 +4,7 @@ data/processed/*
 !data/processed/.gitkeep
 data/chunks/*
 !data/chunks/.gitkeep
+!data/chunks/chunks.json
 embeddings/*
 !embeddings/.gitkeep
 indexes/*
