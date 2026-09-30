@@ -1,6 +1,7 @@
 """Wraps Chroma local vector DB collection creation, persistence, and querying with metadata filtering."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -13,8 +14,16 @@ except ModuleNotFoundError:
     from embedder import MODEL_NAME, get_embedding_model
 
 ROOT = Path(__file__).resolve().parents[2]
-CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
-CHROMA_PATH = ROOT / "indexes" / "chroma_db"
+DEFAULT_CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
+DEFAULT_CHROMA_PATH = ROOT / "indexes" / "chroma_db"
+
+
+def configured_path(environment_name, default_path):
+    configured = os.getenv(environment_name)
+    path = Path(configured) if configured else default_path
+    return path if path.is_absolute() else ROOT / path
+
+
 class FastEmbedEmbeddingFunction(EmbeddingFunction[Documents]):
     """Chroma-compatible wrapper around the exact MiniLM model in FastEmbed."""
 
@@ -38,13 +47,19 @@ class FastEmbedEmbeddingFunction(EmbeddingFunction[Documents]):
 
 
 class ChromaBackend:
-    def __init__(self):
+    def __init__(self, chroma_path=None, chunks_path=None):
         self.client = None
         self.collection = None
         self.embedding_function = FastEmbedEmbeddingFunction()
+        self.chroma_path = Path(chroma_path) if chroma_path else configured_path(
+            "CHROMA_DB_PATH", DEFAULT_CHROMA_PATH
+        )
+        self.chunks_path = Path(chunks_path) if chunks_path else configured_path(
+            "CHUNKS_JSON_PATH", DEFAULT_CHUNKS_PATH
+        )
 
     def build_collection(self, collection_name="chatgpt_chunks"):
-        self.client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+        self.client = chromadb.PersistentClient(path=str(self.chroma_path))
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
             # Existing collections persist their original function metadata.
@@ -56,7 +71,7 @@ class ChromaBackend:
             print(f"Loaded existing Chroma collection '{collection_name}' with {self.collection.count()} chunks.")
             return self.collection
 
-        with CHUNKS_PATH.open("r", encoding="utf-8") as file:
+        with self.chunks_path.open("r", encoding="utf-8") as file:
             chunks = json.load(file)
         for start in range(0, len(chunks), 100):
             batch = chunks[start:start + 100]

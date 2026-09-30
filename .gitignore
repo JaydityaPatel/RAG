@@ -4,10 +4,12 @@ data/processed/*
 !data/processed/.gitkeep
 data/chunks/*
 !data/chunks/.gitkeep
-!data/chunks/chunks.json
+!data/chunks/chunks_demo_subset.json
 embeddings/*
 !embeddings/.gitkeep
 indexes/*
+!indexes/chroma_db_demo/
+!indexes/chroma_db_demo/**
 .env
 __pycache__/
 *.pyc

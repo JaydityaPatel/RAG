@@ -1,6 +1,7 @@
 """Common retrieval interface over the project's FAISS and Chroma backends."""
 
 import json
+import os
 from pathlib import Path
 
 try:
@@ -12,14 +13,20 @@ except ModuleNotFoundError:
 from src.embedder import get_embedding_model
 
 ROOT = Path(__file__).resolve().parent.parent
-CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
+DEFAULT_CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
+
+
+def configured_chunks_path():
+    configured = os.getenv("CHUNKS_JSON_PATH")
+    path = Path(configured) if configured else DEFAULT_CHUNKS_PATH
+    return path if path.is_absolute() else ROOT / path
 
 
 class Retriever:
     def __init__(self, backend="chroma", **kwargs):
         if backend not in {"chroma", "faiss"}:
             raise ValueError("Unsupported backend. Choose 'chroma' or 'faiss'.")
-        with CHUNKS_PATH.open("r", encoding="utf-8") as file:
+        with configured_chunks_path().open("r", encoding="utf-8") as file:
             chunks = json.load(file)
         self.id_lookup = {chunk["id"]: chunk for chunk in chunks}
         self.backend_name = backend
