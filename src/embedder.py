@@ -1,13 +1,14 @@
-"""Generates and persists sentence-transformer embeddings for text chunks."""
+"""Generates embeddings with FastEmbed's ONNX MiniLM model."""
 
 import json
 import time
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 CHUNKS_PATH = Path(__file__).resolve().parent.parent / "data" / "chunks" / "chunks.json"
 EMBEDDINGS_DIR = Path(__file__).resolve().parent.parent / "embeddings"
 EMBEDDINGS_PATH = EMBEDDINGS_DIR / "chunk_embeddings.npy"
@@ -23,15 +24,16 @@ def embeddings_are_current():
     return EMBEDDINGS_PATH.exists() and EMBEDDINGS_PATH.stat().st_mtime >= CHUNKS_PATH.stat().st_mtime
 
 
+@lru_cache(maxsize=1)
+def get_embedding_model():
+    """Reuse one small ONNX model instance across query operations."""
+    return TextEmbedding(model_name=MODEL_NAME, threads=2)
+
+
 def generate_embeddings(chunks, model):
     texts = [chunk["text"] for chunk in chunks]
-    return model.encode(
-        texts,
-        batch_size=32,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        normalize_embeddings=False,
-    ).astype(np.float32)
+    vectors = model.embed(texts, batch_size=32)
+    return np.asarray(list(vectors), dtype=np.float32)
 
 
 def main():
@@ -45,10 +47,7 @@ def main():
             chunk_ids = json.load(file)
         print("Embeddings are current; skipped regeneration.")
     else:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer(MODEL_NAME)
-        embeddings = generate_embeddings(chunks, model)
+        embeddings = generate_embeddings(chunks, get_embedding_model())
         chunk_ids = [chunk["id"] for chunk in chunks]
         np.save(EMBEDDINGS_PATH, embeddings)
         with IDS_PATH.open("w", encoding="utf-8") as file:

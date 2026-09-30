@@ -5,25 +5,51 @@ import sys
 from pathlib import Path
 
 import chromadb
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+
+try:
+    from src.embedder import MODEL_NAME, get_embedding_model
+except ModuleNotFoundError:
+    from embedder import MODEL_NAME, get_embedding_model
 
 ROOT = Path(__file__).resolve().parents[2]
 CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
 CHROMA_PATH = ROOT / "indexes" / "chroma_db"
-MODEL_NAME = "all-MiniLM-L6-v2"
+class FastEmbedEmbeddingFunction(EmbeddingFunction[Documents]):
+    """Chroma-compatible wrapper around the exact MiniLM model in FastEmbed."""
+
+    def __init__(self, model_name=MODEL_NAME):
+        self.model_name = model_name
+        self.model = get_embedding_model()
+
+    def __call__(self, input: Documents) -> Embeddings:
+        return [vector.tolist() for vector in self.model.embed(input)]
+
+    @staticmethod
+    def name() -> str:
+        return "fastembed-all-minilm-l6-v2"
+
+    @staticmethod
+    def build_from_config(config):
+        return FastEmbedEmbeddingFunction(**config)
+
+    def get_config(self):
+        return {"model_name": self.model_name}
 
 
 class ChromaBackend:
     def __init__(self):
         self.client = None
         self.collection = None
-        self.embedding_function = SentenceTransformerEmbeddingFunction(model_name=MODEL_NAME)
+        self.embedding_function = FastEmbedEmbeddingFunction()
 
     def build_collection(self, collection_name="chatgpt_chunks"):
         self.client = chromadb.PersistentClient(path=str(CHROMA_PATH))
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
-            embedding_function=self.embedding_function,
+            # Existing collections persist their original function metadata.
+            # We pass explicit vectors below so querying never changes stored data.
+            embedding_function=None,
             metadata={"hnsw:space": "cosine"},
         )
         if self.collection.count() > 0:
@@ -46,12 +72,16 @@ class ChromaBackend:
                 ids=[chunk["id"] for chunk in batch],
                 documents=[chunk["text"] for chunk in batch],
                 metadatas=metadata,
+                embeddings=self.embedding_function([chunk["text"] for chunk in batch]),
             )
         print(f"Built Chroma collection '{collection_name}' with {self.collection.count()} chunks.")
         return self.collection
 
     def search(self, query_text, top_k=5, where_filter=None):
-        kwargs = {"query_texts": [query_text], "n_results": top_k}
+        kwargs = {
+            "query_embeddings": self.embedding_function([query_text]),
+            "n_results": top_k,
+        }
         if where_filter is not None:
             kwargs["where"] = where_filter
         response = self.collection.query(**kwargs)

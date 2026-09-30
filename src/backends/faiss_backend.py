@@ -7,7 +7,11 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+try:
+    from src.embedder import get_embedding_model
+except ModuleNotFoundError:
+    from embedder import get_embedding_model
 
 ROOT = Path(__file__).resolve().parents[2]
 EMBEDDINGS_PATH = ROOT / "embeddings" / "chunk_embeddings.npy"
@@ -62,7 +66,10 @@ class FaissBackend:
         return faiss.read_index(str(IVF_PATH))
 
     def search(self, index, query_text, embedding_model, top_k=5, nprobe=10):
-        query_vector = embedding_model.encode(query_text, convert_to_numpy=True).astype(np.float32).reshape(1, -1)
+        query_vector = np.asarray(
+            next(iter(embedding_model.embed([query_text]))),
+            dtype=np.float32,
+        ).reshape(1, -1)
         faiss.normalize_L2(query_vector)
         if hasattr(index, "nprobe"):
             index.nprobe = nprobe
@@ -103,7 +110,7 @@ if __name__ == "__main__":
 
     flat_index = backend.load_flat_index()
     ivf_index = backend.load_ivf_index()
-    model = SentenceTransformer(MODEL_NAME)
+    model = get_embedding_model()
     queries = [
         "What have I learned about AWS?",
         "Tips for saving water",

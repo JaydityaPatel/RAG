@@ -9,7 +9,7 @@ try:
 except ModuleNotFoundError:
     from backends.chroma_backend import ChromaBackend
     from backends.faiss_backend import FaissBackend
-from sentence_transformers import SentenceTransformer
+from src.embedder import get_embedding_model
 
 ROOT = Path(__file__).resolve().parent.parent
 CHUNKS_PATH = ROOT / "data" / "chunks" / "chunks.json"
@@ -30,7 +30,7 @@ class Retriever:
             self.index = None
         else:
             self.index = self.backend.load_flat_index()
-            self.embedding_model = kwargs.get("embedding_model") or SentenceTransformer("all-MiniLM-L6-v2")
+            self.embedding_model = kwargs.get("embedding_model") or get_embedding_model()
 
     def retrieve(self, query_text, top_k=5):
         if self.backend_name == "chroma":

@@ -10,6 +10,11 @@ import numpy as np
 from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 
+try:
+    from src.embedder import get_embedding_model
+except ModuleNotFoundError:
+    from embedder import get_embedding_model
+
 ROOT = Path(__file__).resolve().parents[2]
 EMBEDDINGS_PATH = ROOT / "embeddings" / "chunk_embeddings.npy"
 IDS_PATH = ROOT / "embeddings" / "chunk_ids.json"
@@ -66,7 +71,7 @@ class PineconeBackend:
         return uploaded
 
     def search(self, query_text, embedding_model, top_k=5):
-        query_vector = embedding_model.encode(query_text, convert_to_numpy=True).tolist()
+        query_vector = next(iter(embedding_model.embed([query_text]))).tolist()
         response = self.index.query(vector=query_vector, namespace=self.namespace, top_k=top_k, include_metadata=True)
         return [{"id": match["id"], "score": float(match["score"]), "metadata": match.get("metadata", {})}
                 for match in response.get("matches", [])]
@@ -96,8 +101,6 @@ class PineconeBackend:
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    from sentence_transformers import SentenceTransformer
-
     backend = PineconeBackend()
     print("\nSTEP 1: create_index_if_not_exists()")
     backend.create_index_if_not_exists()
@@ -108,7 +111,7 @@ if __name__ == "__main__":
     print("\nSTEP 4: vector count after upload")
     time.sleep(5)
     print(backend.get_namespace_vector_count())
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = get_embedding_model()
     for query in ["What have I learned about AWS?", "Tips for saving water", "cybersecurity team names"]:
         print(f"\nSTEP 5: {query}")
         for result in backend.enrich_with_local_text(backend.search(query, model)):
