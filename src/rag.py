@@ -41,31 +41,42 @@ def build_prompt(question, retrieved_chunks):
 
 def answer_question(question, retriever, top_k=5):
     """Retrieve context, ask Gemini, and return the answer with source metadata."""
+    total_started = time.perf_counter()
     retrieval_started = time.perf_counter()
     retrieved = retriever.retrieve(question, top_k=top_k)
-    retrieval_seconds = time.perf_counter() - retrieval_started
+    retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
     sources = [
         {"title": chunk["title"], "create_date": chunk["create_date"],
          "score": chunk["score"], "conversation_id": chunk["conversation_id"]}
         for chunk in retrieved
     ]
     result = {"question": question, "answer": None, "sources": sources}
+    generation_ms = 0.0
     try:
         if client is None:
             raise RuntimeError("LLM_API_KEY is not set in .env")
+        prompt = build_prompt(question, retrieved)
         generation_started = time.perf_counter()
-        response = client.models.generate_content(
-            model=LLM_MODEL,
-            contents=build_prompt(question, retrieved),
-        )
+        try:
+            response = client.models.generate_content(model=LLM_MODEL, contents=prompt)
+        finally:
+            generation_ms = (time.perf_counter() - generation_started) * 1000
         result["answer"] = response.text
-        print(
-            f"RAG timings: retrieval={retrieval_seconds:.3f}s, "
-            f"Gemini ({LLM_MODEL})={time.perf_counter() - generation_started:.3f}s"
-        )
     except Exception as error:
-        print(f"RAG timings: retrieval={retrieval_seconds:.3f}s; Gemini error: {error}")
         result["error"] = str(error)
+    total_ms = (time.perf_counter() - total_started) * 1000
+    overhead_ms = total_ms - retrieval_ms - generation_ms
+    result["timing"] = {
+        "retrieval_ms": retrieval_ms,
+        "generation_ms": generation_ms,
+        "overhead_ms": overhead_ms,
+        "total_ms": total_ms,
+    }
+    print(
+        "RAG timings: "
+        f"retrieval={retrieval_ms:.2f}ms, generation={generation_ms:.2f}ms, "
+        f"overhead={overhead_ms:.2f}ms, total={total_ms:.2f}ms"
+    )
     return result
 
 

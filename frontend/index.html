@@ -31,6 +31,7 @@
     .assistant { align-self: flex-start; background: #ffffff08; border: 1px solid #ffffff0a; }
     .user { align-self: flex-end; background: #153855; color: #dff4ff; }
     .error { color: #ffb6b6; } .sources { margin-top: 10px; color: #88a6c4; font-size: 11px; }
+    .timing { margin-top: 7px; color: #718096; font-size: 11px; }
     #composer { display: flex; gap: 8px; padding: 14px; border-top: 1px solid #ffffff12; }
     input { width: 0; flex: 1; padding: 12px; border: 1px solid #ffffff16; border-radius: 12px; background: #060b14; color: #fff; }
     #send { width: 44px; border: 0; border-radius: 12px; background: #83d2ff; color: #062138; cursor: pointer; font-size: 23px; }
@@ -555,6 +556,12 @@
           sources.className = 'sources';
           sources.textContent = data.sources.map(source => [source.title, source.create_date].filter(Boolean).join(' · ')).join('\n');
           reply.append(sources);
+        }
+        if (data.timing && ['retrieval_ms', 'generation_ms', 'total_ms'].every(key => Number.isFinite(data.timing[key]))) {
+          const timing = document.createElement('div');
+          timing.className = 'timing';
+          timing.textContent = `Retrieval: ${Math.round(data.timing.retrieval_ms)}ms · Generation: ${Math.round(data.timing.generation_ms)}ms · Total: ${Math.round(data.timing.total_ms)}ms`;
+          reply.append(timing);
         }
       } catch (error) {
         reply.classList.add('error');

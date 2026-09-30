@@ -149,6 +149,7 @@ def ask(payload: AskRequest, _username: str = Depends(require_login)):
                 {"title": source["title"], "create_date": source["create_date"], "score": source["score"]}
                 for source in result["sources"]
             ],
+            "timing": result["timing"],
         }
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Unable to answer question: {error}") from error
